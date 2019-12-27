@@ -1,36 +1,69 @@
 import { Component, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from  '@angular/forms';
-import { Router } from  '@angular/router';
-import { User } from  '../../user';
-import { AuthService } from  '../../auth.service';
+import { Router, ActivatedRoute } from '@angular/router';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { first } from 'rxjs/operators';
+
+import { AlertService } from "../../services/alert.service";
+import { AuthenticationService } from "../../services/authentication.service";
 
 @Component({
-  selector: 'app-log-in',
-  templateUrl: './log-in.component.html',
-  styleUrls: ['./log-in.component.css']
+  selector: "app-log-in",
+  templateUrl: "./log-in.component.html",
+  styleUrls: ["./log-in.component.css"]
 })
 export class LogInComponent implements OnInit {
   loginForm: FormGroup;
-  isSubmitted  =  false;
-  constructor( private authService: AuthService, private router: Router, private formBuilder: FormBuilder ) { }
+  loading = false;
+  submitted = false;
+  returnUrl: string;
+
+  constructor(
+      private formBuilder: FormBuilder,
+      private route: ActivatedRoute,
+      private router: Router,
+      private authenticationService: AuthenticationService,
+      private alertService: AlertService
+  ) {
+      // redirect to home if already logged in
+      if (this.authenticationService.currentUserValue) {
+          this.router.navigate(['/']);
+      }
+  }
 
   ngOnInit() {
-    this.loginForm  =  this.formBuilder.group({
-      username: ['', Validators.required],
-      password: ['', Validators.required]
-  });
+      this.loginForm = this.formBuilder.group({
+          username: ['', Validators.required],
+          password: ['', Validators.required]
+      });
+
+      // get return url from route parameters or default to '/'
+      this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/';
   }
 
-  get formControls() { return this.loginForm.controls; }
+  // convenience getter for easy access to form fields
+  get f() { return this.loginForm.controls; }
 
-  login() {
-    console.log(this.loginForm.value);
-    this.isSubmitted = true;
-    if (this.loginForm.invalid) {
-      return;
-    }
-    this.authService.login(this.loginForm.value);
-    this.router.navigateByUrl('/dashboard');
+  onSubmit() {
+      this.submitted = true;
+
+      // reset alerts on submit
+      this.alertService.clear();
+
+      // stop here if form is invalid
+      if (this.loginForm.invalid) {
+          return;
+      }
+
+      this.loading = true;
+      this.authenticationService.login(this.f.username.value, this.f.password.value)
+          .pipe(first())
+          .subscribe(
+              data => {
+                  this.router.navigate([this.returnUrl]);
+              },
+              error => {
+                  this.alertService.error(error);
+                  this.loading = false;
+              });
   }
-
 }
